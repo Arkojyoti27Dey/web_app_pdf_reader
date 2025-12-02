@@ -1,3 +1,6 @@
+live link:-
+https://arkojyoti27dey.github.io/web_app_pdf_reader/
+
 PDFVoice Canvas - Technical Documentation
 
 PDFVoice Canvas is a single-file, client-side web application that renders PDF documents using HTML5 Canvas and reads them aloud using the browser's native Web Speech API. It features paragraph-aware navigation, text highlighting, and dynamic reading speed control.
@@ -117,5 +120,6 @@ playAudio(): The entry point that decides whether to read a user selection or au
 Download the pdf_reader.html file.
 
 Open it in any modern browser (Chrome, Edge, Safari, Firefox).
+
 
 Upload a PDF and click Play.
