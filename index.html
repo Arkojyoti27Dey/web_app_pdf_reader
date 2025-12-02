@@ -38,6 +38,7 @@
         
         .canvas-container {
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            transition: width 0.2s ease, height 0.2s ease; /* Smooth zoom transition */
         }
 
         /* PDF.js Text Layer CSS */
@@ -84,78 +85,96 @@
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col font-sans text-gray-800">
 
-    <!-- Header -->
-    <header class="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
-        <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div class="flex items-center gap-2">
-                <i class="ph-fill ph-read-cv-logo text-3xl text-brand-600"></i>
-                <h1 class="text-xl font-bold text-gray-800">PDF<span class="text-brand-600">Voice</span> Canvas</h1>
-            </div>
-            
-            <div class="flex items-center gap-3 w-full md:w-auto">
-                <label for="file-upload" class="flex-1 md:flex-none cursor-pointer bg-brand-50 text-brand-600 hover:bg-brand-100 px-4 py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 border border-brand-200">
-                    <i class="ph ph-upload-simple text-lg"></i>
-                    <span>Upload PDF</span>
-                </label>
-                <input id="file-upload" type="file" accept="application/pdf" class="hidden" />
-            </div>
-        </div>
-    </header>
-
-    <!-- Controls Bar -->
-    <div class="bg-white border-b border-gray-200 py-3 shadow-sm z-10">
-        <div class="max-w-6xl mx-auto px-4 flex flex-wrap items-center justify-between gap-4">
-            
-            <!-- Page Nav -->
-            <div class="flex items-center bg-gray-100 rounded-lg p-1">
-                <button id="prev-page" class="p-2 hover:bg-white hover:shadow rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed" title="Previous Page">
-                    <i class="ph ph-caret-left text-xl"></i>
-                </button>
-                <span class="px-4 font-mono text-sm">
-                    Page <span id="page-num" class="font-bold">--</span> / <span id="page-count">--</span>
-                </span>
-                <button id="next-page" class="p-2 hover:bg-white hover:shadow rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed" title="Next Page">
-                    <i class="ph ph-caret-right text-xl"></i>
-                </button>
-            </div>
-
-            <!-- Audio Controls -->
-            <div class="flex items-center gap-4 flex-wrap justify-center">
-                
-                <!-- Speed Control -->
-                <div class="flex items-center gap-2 bg-gray-50 px-3 py-1 rounded-lg border border-gray-200">
-                    <i class="ph ph-gauge text-gray-500"></i>
-                    <input type="range" id="rate-range" min="0.5" max="3.0" step="0.25" value="1.0" class="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-600">
-                    <span id="rate-value" class="text-xs font-mono w-8 text-right">1.0x</span>
-                </div>
-
-                <div class="h-6 w-px bg-gray-300 hidden md:block"></div>
-
+    <!-- Sticky Wrapper: Holds Header and Controls -->
+    <div class="sticky top-0 z-30 w-full bg-white shadow-md">
+        
+        <!-- Header -->
+        <header class="border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row items-center justify-between gap-3">
                 <div class="flex items-center gap-2">
-                    <div id="speaking-indicator" class="hidden flex items-center gap-1 mr-3 text-brand-600 text-sm font-semibold animate-pulse">
-                        <i class="ph-fill ph-speaker-high"></i> Reading...
+                    <i class="ph-fill ph-read-cv-logo text-3xl text-brand-600"></i>
+                    <h1 class="text-xl font-bold text-gray-800">PDF<span class="text-brand-600">Voice</span> Canvas</h1>
+                </div>
+                
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <label for="file-upload" class="flex-1 md:flex-none cursor-pointer bg-brand-50 text-brand-600 hover:bg-brand-100 px-4 py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 border border-brand-200">
+                        <i class="ph ph-upload-simple text-lg"></i>
+                        <span>Upload PDF</span>
+                    </label>
+                    <input id="file-upload" type="file" accept="application/pdf" class="hidden" />
+                </div>
+            </div>
+        </header>
+
+        <!-- Controls Bar -->
+        <div class="border-b border-gray-200 py-2 bg-gray-50/80 backdrop-blur-sm">
+            <div class="max-w-7xl mx-auto px-4 flex flex-wrap items-center justify-between gap-3">
+                
+                <!-- Left Group: Page Nav & Zoom -->
+                <div class="flex items-center gap-4">
+                    <!-- Page Nav -->
+                    <div class="flex items-center bg-white border border-gray-300 rounded-lg p-1 shadow-sm">
+                        <button id="prev-page" class="p-1.5 hover:bg-gray-100 rounded-md transition disabled:opacity-50" title="Previous Page">
+                            <i class="ph ph-caret-left text-lg"></i>
+                        </button>
+                        <span class="px-3 font-mono text-sm">
+                            <span id="page-num" class="font-bold">--</span>/<span id="page-count">--</span>
+                        </span>
+                        <button id="next-page" class="p-1.5 hover:bg-gray-100 rounded-md transition disabled:opacity-50" title="Next Page">
+                            <i class="ph ph-caret-right text-lg"></i>
+                        </button>
                     </div>
 
-                    <!-- Paragraph Navigation Controls -->
-                    <button id="btn-prev-para" class="p-2 text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition disabled:opacity-50" title="Previous Paragraph">
-                        <i class="ph-fill ph-skip-back text-xl"></i>
-                    </button>
+                    <!-- Zoom Controls -->
+                    <div class="flex items-center bg-white border border-gray-300 rounded-lg p-1 shadow-sm">
+                        <button id="zoom-out" class="p-1.5 hover:bg-gray-100 rounded-md transition disabled:opacity-50" title="Zoom Out">
+                            <i class="ph ph-magnifying-glass-minus text-lg"></i>
+                        </button>
+                        <span id="zoom-level" class="px-2 font-mono text-xs w-12 text-center text-gray-600">100%</span>
+                        <button id="zoom-in" class="p-1.5 hover:bg-gray-100 rounded-md transition disabled:opacity-50" title="Zoom In">
+                            <i class="ph ph-magnifying-glass-plus text-lg"></i>
+                        </button>
+                    </div>
+                </div>
 
-                    <button id="btn-play" class="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white px-5 py-2 rounded-lg shadow-md transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" title="Play (Selection or Full Page)">
-                        <i class="ph-fill ph-play"></i> Play
-                    </button>
+                <!-- Right Group: Audio Controls -->
+                <div class="flex items-center gap-4 flex-wrap justify-center">
+                    
+                    <!-- Speed -->
+                    <div class="hidden md:flex items-center gap-2 bg-white px-2 py-1 rounded-lg border border-gray-300 shadow-sm">
+                        <i class="ph ph-gauge text-gray-400"></i>
+                        <input type="range" id="rate-range" min="0.5" max="3.0" step="0.25" value="1.0" class="w-16 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-600">
+                        <span id="rate-value" class="text-xs font-mono w-8 text-right">1.0x</span>
+                    </div>
 
-                    <button id="btn-next-para" class="p-2 text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition disabled:opacity-50" title="Next Paragraph">
-                        <i class="ph-fill ph-skip-forward text-xl"></i>
-                    </button>
+                    <div class="h-6 w-px bg-gray-300 hidden md:block"></div>
 
-                    <!-- Pause/Stop -->
-                    <button id="btn-pause" class="p-2 text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition disabled:opacity-50" title="Pause">
-                        <i class="ph-fill ph-pause text-xl"></i>
-                    </button>
-                    <button id="btn-stop" class="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50" title="Stop">
-                        <i class="ph-fill ph-stop text-xl"></i>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <div id="speaking-indicator" class="hidden flex items-center gap-1 mr-3 text-brand-600 text-sm font-semibold animate-pulse">
+                            <i class="ph-fill ph-speaker-high"></i>
+                        </div>
+
+                        <!-- Paragraph Navigation -->
+                        <button id="btn-prev-para" class="p-2 text-gray-600 hover:text-brand-600 hover:bg-white hover:shadow-sm rounded-lg transition disabled:opacity-50" title="Previous Paragraph">
+                            <i class="ph-fill ph-skip-back text-xl"></i>
+                        </button>
+
+                        <button id="btn-play" class="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white px-4 py-2 rounded-lg shadow transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" title="Play">
+                            <i class="ph-fill ph-play"></i> <span class="hidden sm:inline">Play</span>
+                        </button>
+
+                        <button id="btn-next-para" class="p-2 text-gray-600 hover:text-brand-600 hover:bg-white hover:shadow-sm rounded-lg transition disabled:opacity-50" title="Next Paragraph">
+                            <i class="ph-fill ph-skip-forward text-xl"></i>
+                        </button>
+
+                        <!-- Pause/Stop -->
+                        <button id="btn-pause" class="p-2 text-gray-600 hover:text-brand-600 hover:bg-white hover:shadow-sm rounded-lg transition disabled:opacity-50" title="Pause">
+                            <i class="ph-fill ph-pause text-xl"></i>
+                        </button>
+                        <button id="btn-stop" class="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 hover:shadow-sm rounded-lg transition disabled:opacity-50" title="Stop">
+                            <i class="ph-fill ph-stop text-xl"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -171,7 +190,7 @@
                     <i class="ph-duotone ph-file-pdf text-3xl"></i>
                 </div>
                 <h2 class="text-2xl font-bold text-gray-800 mb-2">No PDF Loaded</h2>
-                <p class="text-gray-500 mb-6">Upload a PDF. Use the controls to navigate and listen paragraph-by-paragraph.</p>
+                <p class="text-gray-500 mb-6">Upload a PDF to start reading.</p>
                 <label for="file-upload" class="cursor-pointer bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-xl font-medium transition inline-flex items-center gap-2 shadow-lg shadow-brand-500/30">
                     <i class="ph-fill ph-upload-simple"></i> Select File
                 </label>
@@ -179,7 +198,7 @@
         </div>
 
         <!-- Canvas Container -->
-        <div id="pdf-wrapper" class="hidden flex flex-col items-center w-full">
+        <div id="pdf-wrapper" class="hidden flex flex-col items-center w-full pb-20">
             <!-- Container needs relative positioning for the absolute text layer -->
             <div id="page-container" class="canvas-container relative bg-white">
                 <canvas id="the-canvas" class="block"></canvas>
@@ -189,7 +208,7 @@
                 <div id="text-layer" class="textLayer"></div>
             </div>
             <p class="mt-4 text-gray-400 text-xs text-center">
-                Highlight text to read specific sections • Default: Reads paragraph by paragraph
+                Scroll down to read more • Controls stay pinned to top
             </p>
         </div>
 
@@ -203,13 +222,14 @@
         let pageNum = 1;
         let pageRendering = false;
         let pageNumPending = null;
-        let scale = 1.5;
+        let scale = 1.25; // Default Zoom
         
         const canvas = document.getElementById('the-canvas');
         const ctx = canvas.getContext('2d');
         const textLayerDiv = document.getElementById('text-layer');
         const pageContainer = document.getElementById('page-container');
         const highlightBox = document.getElementById('highlight-box');
+        const zoomLevelSpan = document.getElementById('zoom-level');
         
         // Audio & Text Logic State
         let synth = window.speechSynthesis;
@@ -218,7 +238,7 @@
         
         // Data Structures
         let pageFullText = ""; 
-        let paragraphs = []; // Array of { text: string, bbox: {x,y,w,h} }
+        let paragraphs = []; 
         let currentParagraphIndex = 0;
         
         // New State for Dynamic Speed & Auto Page Turn
@@ -226,7 +246,7 @@
         let isAutoModeActive = false;
         let isChangingSpeed = false;
         let speedDebounceTimer = null;
-        let shouldAutoPlayNextPage = false; // Flag for continuous reading across pages
+        let shouldAutoPlayNextPage = false;
 
         // --- DOM Elements ---
         const fileInput = document.getElementById('file-upload');
@@ -238,17 +258,35 @@
         const rateRange = document.getElementById('rate-range');
         const rateValue = document.getElementById('rate-value');
 
+        // --- Zoom Logic ---
+        function updateZoomDisplay() {
+            zoomLevelSpan.textContent = `${Math.round(scale * 100)}%`;
+        }
+
+        document.getElementById('zoom-in').addEventListener('click', () => {
+            if (scale >= 3.0) return; // Max zoom
+            scale += 0.25;
+            updateZoomDisplay();
+            if(pdfDoc) queueRenderPage(pageNum);
+        });
+
+        document.getElementById('zoom-out').addEventListener('click', () => {
+            if (scale <= 0.5) return; // Min zoom
+            scale -= 0.25;
+            updateZoomDisplay();
+            if(pdfDoc) queueRenderPage(pageNum);
+        });
+        
+        updateZoomDisplay(); // Init
+
         // --- PDF Rendering Logic ---
 
         function renderPage(num) {
-            // Check if we are in auto-play mode before stopping audio
-            // We need to preserve this intention because stopAudio() clears flags
             const continueAutoPlay = shouldAutoPlayNextPage;
 
             pageRendering = true;
             stopAudio(); 
 
-            // Restore the flag if it was true before stopping
             if (continueAutoPlay) {
                 shouldAutoPlayNextPage = true;
             }
@@ -292,10 +330,9 @@
                         textDivs: []
                     });
                     
-                    // 5. Check if we need to auto-play (Continuous Reading)
+                    // 5. Check if we need to auto-play
                     if (shouldAutoPlayNextPage) {
                         shouldAutoPlayNextPage = false;
-                        // Small delay to allow visual transition
                         setTimeout(() => {
                             speakParagraph(0);
                         }, 500);
@@ -311,9 +348,6 @@
             });
         }
 
-        /**
-         * Analyzing text items to group them into Paragraphs with Bounding Boxes.
-         */
         function processTextContent(textContent, viewport) {
             const items = textContent.items;
             const fullStr = items.map(i => i.str).join(' ');
@@ -326,14 +360,13 @@
             let currentPara = {
                 text: "",
                 items: [],
-                y: null // Tracking Y to detect breaks
+                y: null 
             };
 
             items.forEach((item, index) => {
                 const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
                 const y = tx[5]; 
                 
-                // If gap between this item and last item is large, new paragraph
                 if (currentPara.items.length > 0) {
                     const lastItemY = currentPara.y;
                     const diff = Math.abs(y - lastItemY);
@@ -434,21 +467,17 @@
             const newRate = e.target.value;
             rateValue.textContent = `${newRate}x`;
 
-            // Debounce to prevent rapid restarting
             clearTimeout(speedDebounceTimer);
             speedDebounceTimer = setTimeout(() => {
-                // If we are currently speaking, we must restart for speed to apply
                 if (synth.speaking && !isPaused) {
                     isChangingSpeed = true;
                     synth.cancel();
-                    
-                    // Allow a tiny microtask pause for the browser to register the cancel
                     setTimeout(() => {
                         isChangingSpeed = false;
                         speakText(currentTextBeingSpoken, isAutoModeActive);
                     }, 50);
                 }
-            }, 300); // 300ms delay after sliding stops
+            }, 300);
         });
 
         function playAudio() {
@@ -486,14 +515,12 @@
         }
 
         function speakParagraph(index) {
-            // Check if we reached the end of the page
             if (index >= paragraphs.length) {
                 if (pageNum < pdfDoc.numPages) {
-                    // Turn page and keep playing
                     shouldAutoPlayNextPage = true;
                     onNextPage();
                 } else {
-                    stopAudio(); // End of document
+                    stopAudio(); 
                 }
                 return;
             }
@@ -513,31 +540,24 @@
         }
 
         function speakText(text, isAutoSequence = false) {
-            // 1. Save State for Speed Adjustment
             currentTextBeingSpoken = text;
             isAutoModeActive = isAutoSequence;
 
-            // 2. Cancel any existing
             synth.cancel();
 
-            // 3. Create Utterance
             currentUtterance = new SpeechSynthesisUtterance(text);
             currentUtterance.rate = parseFloat(rateRange.value);
 
-            // 4. Voice Selection
             const voices = synth.getVoices();
             const preferredVoice = voices.find(v => v.lang.includes('en-US') || v.lang.includes('en-GB'));
             if (preferredVoice) currentUtterance.voice = preferredVoice;
 
-            // 5. Events
             currentUtterance.onstart = () => {
                 indicator.classList.remove('hidden');
                 document.getElementById('btn-play').classList.add('ring-2', 'ring-brand-300');
             };
             
             currentUtterance.onend = () => {
-                // IMPORTANT: If we are just changing speed, do NOT advance to next paragraph yet.
-                // The cancel() call above triggers onend, but we use the isChangingSpeed flag to ignore it.
                 if (isChangingSpeed) return;
 
                 if (isAutoSequence) {
@@ -567,7 +587,7 @@
             synth.cancel();
             resetAudioState();
             currentParagraphIndex = 0; 
-            shouldAutoPlayNextPage = false; // Ensure auto-play flag is cleared on manual stop
+            shouldAutoPlayNextPage = false; 
         }
 
         function resetAudioState() {
