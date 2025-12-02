@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas PDF Reader & Speaker</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PDF.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <script>
+        // Configure Tailwind
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #aaa; }
+        
+        .canvas-container {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* PDF.js Text Layer CSS */
+        .textLayer {
+            position: absolute;
+            text-align: initial;
+            left: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden;
+            line-height: 1.0;
+            text-size-adjust: none;
+            forced-color-adjust: none;
+            transform-origin: 0 0;
+            z-index: 2;
+        }
+
+        .textLayer span {
+            color: transparent;
+            position: absolute;
+            white-space: pre;
+            cursor: text;
+            transform-origin: 0% 0%;
+        }
+
+        /* Highlight color for selection */
+        ::selection {
+            background: rgba(14, 165, 233, 0.3);
+        }
+
+        /* Reading Highlight Box */
+        #highlight-box {
+            position: absolute;
+            background-color: rgba(255, 223, 0, 0.25); /* Yellow highlight */
+            border: 2px solid rgba(255, 200, 0, 0.5);
+            border-radius: 4px;
+            pointer-events: none; /* Let clicks pass through to text layer */
+            z-index: 1; /* Below text layer but above canvas */
+            transition: all 0.2s ease;
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col font-sans text-gray-800">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <i class="ph-fill ph-read-cv-logo text-3xl text-brand-600"></i>
+                <h1 class="text-xl font-bold text-gray-800">PDF<span class="text-brand-600">Voice</span> Canvas</h1>
+            </div>
+            
+            <div class="flex items-center gap-3 w-full md:w-auto">
+                <label for="file-upload" class="flex-1 md:flex-none cursor-pointer bg-brand-50 text-brand-600 hover:bg-brand-100 px-4 py-2 rounded-lg font-medium transition flex items-center justify-center gap-2 border border-brand-200">
+                    <i class="ph ph-upload-simple text-lg"></i>
+                    <span>Upload PDF</span>
+                </label>
+                <input id="file-upload" type="file" accept="application/pdf" class="hidden" />
+            </div>
+        </div>
+    </header>
+
+    <!-- Controls Bar -->
+    <div class="bg-white border-b border-gray-200 py-3 shadow-sm z-10">
+        <div class="max-w-6xl mx-auto px-4 flex flex-wrap items-center justify-between gap-4">
+            
+            <!-- Page Nav -->
+            <div class="flex items-center bg-gray-100 rounded-lg p-1">
+                <button id="prev-page" class="p-2 hover:bg-white hover:shadow rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed" title="Previous Page">
+                    <i class="ph ph-caret-left text-xl"></i>
+                </button>
+                <span class="px-4 font-mono text-sm">
+                    Page <span id="page-num" class="font-bold">--</span> / <span id="page-count">--</span>
+                </span>
+                <button id="next-page" class="p-2 hover:bg-white hover:shadow rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed" title="Next Page">
+                    <i class="ph ph-caret-right text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Audio Controls -->
+            <div class="flex items-center gap-4 flex-wrap justify-center">
+                
+                <!-- Speed Control -->
+                <div class="flex items-center gap-2 bg-gray-50 px-3 py-1 rounded-lg border border-gray-200">
+                    <i class="ph ph-gauge text-gray-500"></i>
+                    <input type="range" id="rate-range" min="0.5" max="3.0" step="0.25" value="1.0" class="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-600">
+                    <span id="rate-value" class="text-xs font-mono w-8 text-right">1.0x</span>
+                </div>
+
+                <div class="h-6 w-px bg-gray-300 hidden md:block"></div>
+
+                <div class="flex items-center gap-2">
+                    <div id="speaking-indicator" class="hidden flex items-center gap-1 mr-3 text-brand-600 text-sm font-semibold animate-pulse">
+                        <i class="ph-fill ph-speaker-high"></i> Reading...
+                    </div>
+
+                    <!-- Paragraph Navigation Controls -->
+                    <button id="btn-prev-para" class="p-2 text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition disabled:opacity-50" title="Previous Paragraph">
+                        <i class="ph-fill ph-skip-back text-xl"></i>
+                    </button>
+
+                    <button id="btn-play" class="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white px-5 py-2 rounded-lg shadow-md transition transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" title="Play (Selection or Full Page)">
+                        <i class="ph-fill ph-play"></i> Play
+                    </button>
+
+                    <button id="btn-next-para" class="p-2 text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition disabled:opacity-50" title="Next Paragraph">
+                        <i class="ph-fill ph-skip-forward text-xl"></i>
+                    </button>
+
+                    <!-- Pause/Stop -->
+                    <button id="btn-pause" class="p-2 text-gray-600 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition disabled:opacity-50" title="Pause">
+                        <i class="ph-fill ph-pause text-xl"></i>
+                    </button>
+                    <button id="btn-stop" class="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50" title="Stop">
+                        <i class="ph-fill ph-stop text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow flex flex-col items-center justify-start p-6 overflow-auto bg-gray-100">
+        
+        <!-- Welcome State -->
+        <div id="empty-state" class="text-center mt-20 max-w-md">
+            <div class="bg-white p-8 rounded-2xl shadow-lg border border-gray-100">
+                <div class="bg-brand-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-600">
+                    <i class="ph-duotone ph-file-pdf text-3xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">No PDF Loaded</h2>
+                <p class="text-gray-500 mb-6">Upload a PDF. Use the controls to navigate and listen paragraph-by-paragraph.</p>
+                <label for="file-upload" class="cursor-pointer bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-xl font-medium transition inline-flex items-center gap-2 shadow-lg shadow-brand-500/30">
+                    <i class="ph-fill ph-upload-simple"></i> Select File
+                </label>
+            </div>
+        </div>
+
+        <!-- Canvas Container -->
+        <div id="pdf-wrapper" class="hidden flex flex-col items-center w-full">
+            <!-- Container needs relative positioning for the absolute text layer -->
+            <div id="page-container" class="canvas-container relative bg-white">
+                <canvas id="the-canvas" class="block"></canvas>
+                <!-- Highlight Overlay -->
+                <div id="highlight-box"></div>
+                <!-- Text Selection Layer -->
+                <div id="text-layer" class="textLayer"></div>
+            </div>
+            <p class="mt-4 text-gray-400 text-xs text-center">
+                Highlight text to read specific sections • Default: Reads paragraph by paragraph
+            </p>
+        </div>
+
+    </main>
+
+    <script>
+        // --- Configuration & State ---
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        let pdfDoc = null;
+        let pageNum = 1;
+        let pageRendering = false;
+        let pageNumPending = null;
+        let scale = 1.5;
+        
+        const canvas = document.getElementById('the-canvas');
+        const ctx = canvas.getContext('2d');
+        const textLayerDiv = document.getElementById('text-layer');
+        const pageContainer = document.getElementById('page-container');
+        const highlightBox = document.getElementById('highlight-box');
+        
+        // Audio & Text Logic State
+        let synth = window.speechSynthesis;
+        let currentUtterance = null;
+        let isPaused = false;
+        
+        // Data Structures
+        let pageFullText = ""; 
+        let paragraphs = []; // Array of { text: string, bbox: {x,y,w,h} }
+        let currentParagraphIndex = 0;
+        
+        // New State for Dynamic Speed & Auto Page Turn
+        let currentTextBeingSpoken = ""; 
+        let isAutoModeActive = false;
+        let isChangingSpeed = false;
+        let speedDebounceTimer = null;
+        let shouldAutoPlayNextPage = false; // Flag for continuous reading across pages
+
+        // --- DOM Elements ---
+        const fileInput = document.getElementById('file-upload');
+        const emptyState = document.getElementById('empty-state');
+        const pdfWrapper = document.getElementById('pdf-wrapper');
+        const pageNumSpan = document.getElementById('page-num');
+        const pageCountSpan = document.getElementById('page-count');
+        const indicator = document.getElementById('speaking-indicator');
+        const rateRange = document.getElementById('rate-range');
+        const rateValue = document.getElementById('rate-value');
+
+        // --- PDF Rendering Logic ---
+
+        function renderPage(num) {
+            // Check if we are in auto-play mode before stopping audio
+            // We need to preserve this intention because stopAudio() clears flags
+            const continueAutoPlay = shouldAutoPlayNextPage;
+
+            pageRendering = true;
+            stopAudio(); 
+
+            // Restore the flag if it was true before stopping
+            if (continueAutoPlay) {
+                shouldAutoPlayNextPage = true;
+            }
+
+            pdfDoc.getPage(num).then(function(page) {
+                const viewport = page.getViewport({scale: scale});
+                
+                // 1. Set dimensions
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                
+                pageContainer.style.width = `${viewport.width}px`;
+                pageContainer.style.height = `${viewport.height}px`;
+                textLayerDiv.style.width = `${viewport.width}px`;
+                textLayerDiv.style.height = `${viewport.height}px`;
+
+                // 2. Render Canvas
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+                const renderTask = page.render(renderContext);
+
+                renderTask.promise.then(function() {
+                    pageRendering = false;
+                    pageNumSpan.textContent = num;
+                    
+                    // 3. Extract Text & Process Layout
+                    return page.getTextContent();
+                }).then(function(textContent) {
+                    processTextContent(textContent, viewport);
+                    
+                    document.getElementById('btn-play').disabled = (pageFullText.trim().length === 0);
+
+                    // 4. Render Text Layer (for user selection)
+                    textLayerDiv.innerHTML = ''; 
+                    pdfjsLib.renderTextLayer({
+                        textContentSource: textContent,
+                        container: textLayerDiv,
+                        viewport: viewport,
+                        textDivs: []
+                    });
+                    
+                    // 5. Check if we need to auto-play (Continuous Reading)
+                    if (shouldAutoPlayNextPage) {
+                        shouldAutoPlayNextPage = false;
+                        // Small delay to allow visual transition
+                        setTimeout(() => {
+                            speakParagraph(0);
+                        }, 500);
+                    }
+
+                    if (pageNumPending !== null) {
+                        renderPage(pageNumPending);
+                        pageNumPending = null;
+                    }
+                }).catch(function(error) {
+                    console.error("Error rendering text:", error);
+                });
+            });
+        }
+
+        /**
+         * Analyzing text items to group them into Paragraphs with Bounding Boxes.
+         */
+        function processTextContent(textContent, viewport) {
+            const items = textContent.items;
+            const fullStr = items.map(i => i.str).join(' ');
+            pageFullText = fullStr;
+            paragraphs = [];
+            currentParagraphIndex = 0;
+
+            if (items.length === 0) return;
+
+            let currentPara = {
+                text: "",
+                items: [],
+                y: null // Tracking Y to detect breaks
+            };
+
+            items.forEach((item, index) => {
+                const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+                const y = tx[5]; 
+                
+                // If gap between this item and last item is large, new paragraph
+                if (currentPara.items.length > 0) {
+                    const lastItemY = currentPara.y;
+                    const diff = Math.abs(y - lastItemY);
+                    
+                    if (diff > (Math.abs(item.height || 12) * 2.5)) { 
+                        finalizeParagraph(currentPara, viewport);
+                        currentPara = { text: "", items: [], y: null };
+                    }
+                }
+
+                currentPara.items.push(item);
+                currentPara.text += item.str + " ";
+                currentPara.y = y;
+            });
+
+            if (currentPara.items.length > 0) {
+                finalizeParagraph(currentPara, viewport);
+            }
+        }
+
+        function finalizeParagraph(paraObj, viewport) {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+            paraObj.items.forEach(item => {
+                const x = item.transform[4];
+                const y = item.transform[5];
+                const w = item.width;
+                const h = item.height || 10; 
+
+                const transformed = viewport.convertToViewportRectangle([x, y, x + w, y + h]);
+                
+                minX = Math.min(minX, transformed[0], transformed[2]);
+                maxX = Math.max(maxX, transformed[0], transformed[2]);
+                minY = Math.min(minY, transformed[1], transformed[3]);
+                maxY = Math.max(maxY, transformed[1], transformed[3]);
+            });
+
+            const cleanedText = paraObj.text.replace(/\s+/g, ' ').trim();
+
+            if (cleanedText.length > 0) {
+                paragraphs.push({
+                    text: cleanedText,
+                    bbox: {
+                        x: minX,
+                        y: minY - 5,
+                        w: maxX - minX,
+                        h: maxY - minY + 5
+                    }
+                });
+            }
+        }
+
+        function queueRenderPage(num) {
+            if (pageRendering) {
+                pageNumPending = num;
+            } else {
+                renderPage(num);
+            }
+        }
+
+        function onPrevPage() {
+            if (pageNum <= 1) return;
+            pageNum--;
+            queueRenderPage(pageNum);
+        }
+
+        function onNextPage() {
+            if (pageNum >= pdfDoc.numPages) return;
+            pageNum++;
+            queueRenderPage(pageNum);
+        }
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file && file.type === "application/pdf") {
+                const fileReader = new FileReader();
+                fileReader.onload = function() {
+                    const typedarray = new Uint8Array(this.result);
+                    pdfjsLib.getDocument(typedarray).promise.then(function(pdfDoc_) {
+                        pdfDoc = pdfDoc_;
+                        document.getElementById('page-count').textContent = pdfDoc.numPages;
+                        emptyState.classList.add('hidden');
+                        pdfWrapper.classList.remove('hidden');
+                        pageNum = 1;
+                        renderPage(pageNum);
+                    }).catch(err => {
+                        console.error(err);
+                        alert("Error loading PDF.");
+                    });
+                };
+                fileReader.readAsArrayBuffer(file);
+            }
+        });
+
+        // --- Text-to-Speech (TTS) Logic ---
+
+        rateRange.addEventListener('input', (e) => {
+            const newRate = e.target.value;
+            rateValue.textContent = `${newRate}x`;
+
+            // Debounce to prevent rapid restarting
+            clearTimeout(speedDebounceTimer);
+            speedDebounceTimer = setTimeout(() => {
+                // If we are currently speaking, we must restart for speed to apply
+                if (synth.speaking && !isPaused) {
+                    isChangingSpeed = true;
+                    synth.cancel();
+                    
+                    // Allow a tiny microtask pause for the browser to register the cancel
+                    setTimeout(() => {
+                        isChangingSpeed = false;
+                        speakText(currentTextBeingSpoken, isAutoModeActive);
+                    }, 50);
+                }
+            }, 300); // 300ms delay after sliding stops
+        });
+
+        function playAudio() {
+            const selection = window.getSelection().toString().trim();
+            
+            if (selection.length > 0) {
+                highlightBox.style.display = 'none';
+                speakText(selection);
+                return;
+            }
+
+            if (paragraphs.length === 0) return;
+
+            if (isPaused) {
+                synth.resume();
+                isPaused = false;
+                indicator.classList.remove('hidden');
+                return;
+            }
+
+            speakParagraph(currentParagraphIndex);
+        }
+
+        function nextParagraph() {
+            if (paragraphs.length === 0) return;
+            if (currentParagraphIndex >= paragraphs.length - 1) return;
+            speakParagraph(currentParagraphIndex + 1);
+        }
+
+        function prevParagraph() {
+            if (paragraphs.length === 0) return;
+            let newIndex = currentParagraphIndex - 1;
+            if (newIndex < 0) newIndex = 0;
+            speakParagraph(newIndex);
+        }
+
+        function speakParagraph(index) {
+            // Check if we reached the end of the page
+            if (index >= paragraphs.length) {
+                if (pageNum < pdfDoc.numPages) {
+                    // Turn page and keep playing
+                    shouldAutoPlayNextPage = true;
+                    onNextPage();
+                } else {
+                    stopAudio(); // End of document
+                }
+                return;
+            }
+
+            window.getSelection().removeAllRanges();
+
+            currentParagraphIndex = index;
+            const para = paragraphs[index];
+
+            highlightBox.style.display = 'block';
+            highlightBox.style.left = `${para.bbox.x}px`;
+            highlightBox.style.top = `${para.bbox.y}px`;
+            highlightBox.style.width = `${para.bbox.w}px`;
+            highlightBox.style.height = `${para.bbox.h}px`;
+
+            speakText(para.text, true);
+        }
+
+        function speakText(text, isAutoSequence = false) {
+            // 1. Save State for Speed Adjustment
+            currentTextBeingSpoken = text;
+            isAutoModeActive = isAutoSequence;
+
+            // 2. Cancel any existing
+            synth.cancel();
+
+            // 3. Create Utterance
+            currentUtterance = new SpeechSynthesisUtterance(text);
+            currentUtterance.rate = parseFloat(rateRange.value);
+
+            // 4. Voice Selection
+            const voices = synth.getVoices();
+            const preferredVoice = voices.find(v => v.lang.includes('en-US') || v.lang.includes('en-GB'));
+            if (preferredVoice) currentUtterance.voice = preferredVoice;
+
+            // 5. Events
+            currentUtterance.onstart = () => {
+                indicator.classList.remove('hidden');
+                document.getElementById('btn-play').classList.add('ring-2', 'ring-brand-300');
+            };
+            
+            currentUtterance.onend = () => {
+                // IMPORTANT: If we are just changing speed, do NOT advance to next paragraph yet.
+                // The cancel() call above triggers onend, but we use the isChangingSpeed flag to ignore it.
+                if (isChangingSpeed) return;
+
+                if (isAutoSequence) {
+                    speakParagraph(currentParagraphIndex + 1);
+                } else {
+                    resetAudioState();
+                }
+            };
+
+            currentUtterance.onerror = () => {
+                if (isChangingSpeed) return;
+                resetAudioState();
+            };
+
+            synth.speak(currentUtterance);
+        }
+
+        function pauseAudio() {
+            if (synth.speaking && !isPaused) {
+                synth.pause();
+                isPaused = true;
+                indicator.classList.add('hidden');
+            }
+        }
+
+        function stopAudio() {
+            synth.cancel();
+            resetAudioState();
+            currentParagraphIndex = 0; 
+            shouldAutoPlayNextPage = false; // Ensure auto-play flag is cleared on manual stop
+        }
+
+        function resetAudioState() {
+            isPaused = false;
+            indicator.classList.add('hidden');
+            document.getElementById('btn-play').classList.remove('ring-2', 'ring-brand-300');
+            highlightBox.style.display = 'none';
+        }
+
+        // --- Event Listeners ---
+        document.getElementById('prev-page').addEventListener('click', onPrevPage);
+        document.getElementById('next-page').addEventListener('click', onNextPage);
+        document.getElementById('btn-play').addEventListener('click', playAudio);
+        document.getElementById('btn-pause').addEventListener('click', pauseAudio);
+        document.getElementById('btn-stop').addEventListener('click', stopAudio);
+        
+        document.getElementById('btn-prev-para').addEventListener('click', prevParagraph);
+        document.getElementById('btn-next-para').addEventListener('click', nextParagraph);
+
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if(pdfDoc) queueRenderPage(pageNum);
+            }, 200);
+        });
+
+        window.speechSynthesis.onvoiceschanged = function() {};
+
+    </script>
+</body>
+</html>
